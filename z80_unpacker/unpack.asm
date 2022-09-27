@@ -85,7 +85,7 @@ unpack:
 .reset_probs:
     dec     bc
     ld      (bc),a              ; will overwrite one extra byte after the array because of odd length
-    dec     bc
+    dec     c
     ld      (bc),a
     dec     l
     jr      nz,.reset_probs
