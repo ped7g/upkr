@@ -89,6 +89,7 @@ unpack:
     ld      (bc),a
     dec     l
     jr      nz,.reset_probs
+    push    hl                  ; push fake last offset (== 0) onto stack
     exa
     ; BC = probs (context_index 0), state HL = 0, A' = 0x80 (no source bits left in upkr_current_byte)
 
@@ -124,13 +125,14 @@ unpack:
         ;             }
     cp      d                   ; CF = prev_was_match
     call    nc,decode_bit       ; if not prev_was_match, then upkr_decode_bit(256)
-    jr      nc,.keep_offset     ; if neither, keep old offset
+    jr      nc,.keep_offset     ; if neither, keep last offset
+    pop     de                  ; throw away last offset
     call    decode_number       ; context_index is already 257-1 as needed by decode_number
     dec     de                  ; offset = upkr_decode_length(257) - 1;
     ld      a,d
     or      e
     ret     z                   ; if(offset == 0) break
-    ld      (.offset),de
+    push    de                  ; store new offset onto stack
 .keep_offset:
         ;             int length = upkr_decode_length(257 + 64);
         ;             while(length--) {
@@ -144,17 +146,20 @@ unpack:
     exx
     IFNDEF BACKWARDS_UNPACK
         ; forward unpack (write_ptr++, upkr_data_ptr++)
-        ld      h,d             ; DE = write_ptr
-        ld      l,e
-.offset+*:  ld  bc,0
-        sbc     hl,bc           ; CF=0 from decode_number ; HL = write_ptr - offset
         pop     bc              ; BC = length
+        pop     hl              ; HL = offset
+        push    hl              ; preserve current offset
+        push    de              ; preserve write_ptr
+        ex      de,hl           ; HL = write_ptr, DE = offset
+        sbc     hl,de           ; CF=0 from decode_number ; HL = write_ptr - offset
+        pop     de              ; restore write_ptr
         ldir
     ELSE
         ; backward unpack (write_ptr--, upkr_data_ptr--)
-.offset+*:  ld  hl,0
-        add     hl,de           ; HL = write_ptr + offset
         pop     bc              ; BC = length
+        pop     hl              ; HL = offset
+        push    hl              ; preserve current offset
+        add     hl,de           ; HL = write_ptr + offset
         lddr
     ENDIF
     exx
