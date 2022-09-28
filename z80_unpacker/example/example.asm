@@ -90,7 +90,7 @@ delay:
     ENDMODULE
 
     MODULE rwd
-        DEFINE BACKWARDS_UNPACK         ; defined to build backwards unpack
+        DEFINE UPKR_REVERSE           ; defined to build backwards unpack
                 ; initial IX points at last byte of compressed data
                 ; initial DE' points at last byte of unpacked data
 

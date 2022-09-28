@@ -12,14 +12,16 @@
 ;;     upkr.unpack
 ;;         IN: IX = packed data, DE' (shadow DE) = destination
 ;;         OUT: IX = after packed data
-;;         modifies: all registers except IY, requires 10 bytes of stack space
+;;         modifies: all registers except IY, requires ~12 bytes of stack space
 ;;
 
-;     DEFINE BACKWARDS_UNPACK         ; uncomment to build backwards depacker (write_ptr--, upkr_data_ptr--)
+;     DEFINE+ UPKR_INVERT_IS_MATCH_BIT    ; -1 byte unpack when --invert-is-match-bit
+
+;     DEFINE+ UPKR_REVERSE                ; reverse depacker (write_ptr--, upkr_data_ptr--), -4 bytes
             ; initial IX points at last byte of compressed data
             ; initial DE' points at last byte of unpacked data
 
-;     DEFINE UPKR_UNPACK_SPEED        ; uncomment to get larger but faster unpack routine
+;     DEFINE+ UPKR_UNPACK_SPEED           ; faster unpack routine, but +25 bytes
 
 ; code size hint: if you put probs array just ahead of BASIC entry point, you will get BC
 ; initialised to probs.e by BASIC `USR` command and you can remove it from unpack init (-3B)
@@ -99,18 +101,22 @@ unpack:
 .decompress_data:
     ld      c,0
     call    decode_bit          ; if(upkr_decode_bit(0))
-    jr      c,.copy_chunk
+    IFDEF UPKR_INVERT_IS_MATCH_BIT
+        jr nc,.copy_chunk
+    ELSE
+        jr c,.copy_chunk
+        inc c                   ; init: byte = 1 (for non invert-is-match-bit variant)
+    ENDIF
 
   ; * extract byte from compressed data (literal)
-    inc     c                   ; C = byte = 1 (and also context_index)
 .decode_byte:
-    call    decode_bit          ; bit = upkr_decode_bit(byte);
-    rl      c                   ; byte = (byte << 1) + bit;
+    call    nc,decode_bit       ; init: skip        // loop: bit = upkr_decode_bit(byte);
+    rl      c                   ; init: byte = 1    // loop: byte = (byte << 1) + bit;
     jr      nc,.decode_byte     ; while(byte < 256)
     ld      a,c
     exx
     ld      (de),a              ; *write_ptr++ = byte;
-    IFNDEF BACKWARDS_UNPACK : inc de : ELSE : dec de : ENDIF
+    IFNDEF UPKR_REVERSE : inc de : ELSE : dec de : ENDIF
     exx
     ld      d,b                 ; prev_was_match = false
     jr      .decompress_data
@@ -144,7 +150,7 @@ unpack:
     call    decode_number       ; length = upkr_decode_length(257 + 64);
     push    de
     exx
-    IFNDEF BACKWARDS_UNPACK
+    IFNDEF UPKR_REVERSE
         ; forward unpack (write_ptr++, upkr_data_ptr++)
         pop     bc              ; BC = length
         pop     hl              ; HL = offset
@@ -218,7 +224,7 @@ decode_bit:
     jr      nz,.has_bit             ; CF=data, ZF=0 -> some bits + stop bit still available
   ; CF=1 (by stop bit)
     ld      a,(ix)
-    IFNDEF BACKWARDS_UNPACK : inc ix : ELSE : dec ix : ENDIF    ; upkr_current_byte = *upkr_data_ptr++;
+    IFNDEF UPKR_REVERSE : inc ix : ELSE : dec ix : ENDIF    ; upkr_current_byte = *upkr_data_ptr++;
     adc     a,a                     ; CF=data, b0=1 as new stop bit
 .has_bit:
     adc     hl,hl                   ; upkr_state = (upkr_state << 1) + (upkr_current_byte >> 7);
