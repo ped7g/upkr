@@ -326,6 +326,8 @@ decode_number:
     rr      e
     jr      c,.fix_bit_pos      ; until stop bit is reached (all bits did land to correct position)
     ret                         ; return with CF=0 (important for unpack routine)
+  ; it should be possible to use --invert-continue-value-bit to get -1B in decode_number when returned carry can be set (--reverse only)
+  ; use `ld de,0 : scf` and flip the logic of both loops, remove `ccf` (that's the -1B) (and test it :) )
 
     DISPLAY "upkr.unpack total size: ",/D,$-unpack
 
